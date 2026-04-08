@@ -147,7 +147,8 @@ export function createTelegramConversationService(deps: {
       }
 
       if (intent.type === "image") {
-        const askForContext = selfieContextState === "none" && isShortImagePing(trimmed) && Math.random() < 0.7;
+        const isBarePing = isShortImagePing(trimmed);
+        const askForContext = selfieContextState === "none" && isBarePing && Math.random() < 0.7;
         if (askForContext) {
           const flirtyPrompt = generateFlirtyPromptResponse(trimmed);
           await input.reply(flirtyPrompt);
@@ -165,23 +166,24 @@ export function createTelegramConversationService(deps: {
           return;
         }
 
-        await runImageFlow(DEFAULT_SELFIE_CONTEXT, decision.forcedImageMode);
+        const prompt = isBarePing ? DEFAULT_SELFIE_CONTEXT : trimmed;
+        await runImageFlow(prompt, decision.forcedImageMode);
         return;
       }
 
       const memoryHits = await memory.findTopSimilar(
         userMessageId
           ? {
-              userId: dbUser.id,
-              embedding: userEmbedding,
-              limit: 5,
-              excludeMessageId: userMessageId,
-            }
+            userId: dbUser.id,
+            embedding: userEmbedding,
+            limit: 5,
+            excludeMessageId: userMessageId,
+          }
           : {
-              userId: dbUser.id,
-              embedding: userEmbedding,
-              limit: 5,
-            },
+            userId: dbUser.id,
+            embedding: userEmbedding,
+            limit: 5,
+          },
       );
       const recent = await memory.listRecentMessages(dbUser.id, 5);
       const importantMemories = await memory.listImportantMemories(dbUser.id, 6);

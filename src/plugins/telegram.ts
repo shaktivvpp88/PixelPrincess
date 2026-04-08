@@ -20,26 +20,45 @@ export const telegramPlugin: FastifyPluginAsync = fp(
 
     app.decorate("telegraf", bot);
 
-    app.addHook("onReady", async () => {
-      app.log.info("telegram.bot.launching");
-      void bot
-        .launch()
-        .then(() => {
-          app.log.info("telegram.bot.ready");
-        })
-        .catch((err: unknown) => {
-          app.log.error({ err }, "telegram.bot.launch_failed");
-        });
-    });
+    if (app.config.NODE_ENV === "production" && app.config.WEBHOOK_URL) {
+      const webhookPath = "/api/telegram";
+      const fullUrl = `${app.config.WEBHOOK_URL.replace(/\/+$/, "")}${webhookPath}`;
 
-    app.addHook("onClose", async () => {
-      app.log.info("telegram.bot.stopping");
-      try {
-        bot.stop("SIGTERM");
-      } catch (err) {
-        app.log.warn({ err }, "telegram.bot.stop_skipped");
-      }
-    });
+      app.post(webhookPath, async (request, reply) => {
+        await bot.handleUpdate(request.body as Parameters<typeof bot.handleUpdate>[0]);
+        return reply.status(200).send("OK");
+      });
+
+      app.addHook("onReady", async () => {
+        try {
+          await bot.telegram.setWebhook(fullUrl);
+          app.log.info({ url: fullUrl }, "telegram.webhook.set");
+        } catch (err) {
+          app.log.error({ err }, "telegram.webhook.set_failed");
+        }
+      });
+    } else {
+      app.addHook("onReady", async () => {
+        app.log.info("telegram.bot.launching_polling_dev");
+        void bot
+          .launch()
+          .then(() => {
+            app.log.info("telegram.bot.ready_polling_dev");
+          })
+          .catch((err: unknown) => {
+            app.log.error({ err }, "telegram.bot.launch_failed");
+          });
+      });
+
+      app.addHook("onClose", async () => {
+        app.log.info("telegram.bot.stopping_polling_dev");
+        try {
+          bot.stop("SIGTERM");
+        } catch (err) {
+          app.log.warn({ err }, "telegram.bot.stop_skipped");
+        }
+      });
+    }
   },
   {
     name: "telegram",
